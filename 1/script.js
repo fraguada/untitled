@@ -198,6 +198,15 @@ function onClick( coo ) {
 
     }
 
+    if ( tcontrols ) { 
+
+        scene.remove( tcontrols ) 
+        tcontrols.dispose()
+        tcontrols = null
+        return
+
+    }
+
 }
 
 let dragging = false
