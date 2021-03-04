@@ -3,7 +3,6 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.126.0/build/three.m
 import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.126.0/examples/jsm/controls/OrbitControls.js'
 import { TransformControls } from 'https://cdn.jsdelivr.net/npm/three@0.126.0/examples/jsm/controls/TransformControls.js'
 import { Rhino3dmLoader } from 'https://cdn.jsdelivr.net/npm/three@0.126.0/examples/jsm/loaders/3DMLoader.js'
-import rhino3dm from 'https://cdn.jsdelivr.net/npm/rhino3dm@0.15.0-beta/rhino3dm.module.js'
 
 const model = 'mesh.3dm'
 
@@ -11,12 +10,12 @@ const material = new THREE.MeshBasicMaterial( {color:0xffffff, transparent: true
 const lineMagentaMaterial = new THREE.LineBasicMaterial( { color: 0xff00ff} )
 const lineBlackMaterial = new THREE.LineBasicMaterial( { color: 0x000000} )
 
-window.addEventListener( 'click', handleInteraction, false)
-window.addEventListener( 'touchstart', handleInteraction, false)
+document.addEventListener( 'pointerdown', handleInteraction, false)
+document.addEventListener( 'touchstart', handleInteraction, false)
 
 // declare variables to store scene, camera, and renderer
 let scene, camera, renderer, mouse, raycaster, controls, tcontrols
-let terrainMesh, meshes
+let terrainMesh, intersectables
 
 init()
 load()
@@ -35,8 +34,9 @@ function load() {
         object.traverse( child => {
             if (child.isMesh) {
                 child.material = material
+                child.name = 'terrainMesh'
                 terrainMesh = child
-                meshes.push(terrainMesh)
+                intersectables.push(terrainMesh)
             } else if (child.isLine) {
                 const layerIndex = child.userData.attributes.layerIndex
                 if (object.userData.layers[layerIndex].name === 'dashed')
@@ -74,17 +74,13 @@ function init () {
     renderer.setSize( window.innerWidth, window.innerHeight )
     document.body.appendChild( renderer.domElement )
 
-    tcontrols = new TransformControls( camera, renderer.domElement )
-    tcontrols.enabled = false
-    tcontrols.setSpace('local')
-    scene.add(tcontrols)
     // add some controls to orbit the camera
     controls = new OrbitControls( camera, renderer.domElement )
 
     raycaster = new THREE.Raycaster()
     mouse = new THREE.Vector2()
 
-    meshes = []
+    intersectables = []
 
     // handle changes in the window size
     window.addEventListener( 'resize', onWindowResize, false )
@@ -93,26 +89,42 @@ function init () {
 
 }
 
+let start, end, ms, startPt, endPt, distance
 function handleInteraction( event ) {
 
-    // console.log( event )
+    //console.log( event )
 
     let coordinates = null
-    if ( event instanceof MouseEvent ) {
-        if ( event.type === 'click' ) {
+    if ( event instanceof PointerEvent ) {
+        if ( event.type === 'pointerdown' ) {
+            start = new Date()
+            startPt = new THREE.Vector2( event.clientX, event.clientY )
+            document.addEventListener( 'pointerup', handleInteraction, false )
+            return
+        } 
+        if ( event.type === 'pointerup' ) {
+            end = new Date()
+            ms = end - start
+            endPt = new THREE.Vector2( event.clientX, event.clientY )
+            distance = startPt.distanceTo( endPt )
             coordinates =  { x: event.clientX, y: event.clientY }
+            document.removeEventListener( 'pointerup', handleInteraction, false )
         }
     } else if ( event instanceof TouchEvent ) {
         if ( event.type === 'touchstart' ) {
             coordinates =  { x: event.changedTouches[0].clientX, y: event.changedTouches[0].clientY }
         }
     }
+
     onClick( coordinates )
 }
 
 function onClick( coo ) {
 
     console.log( `click! (${coo.x}, ${coo.y})`)
+
+    // if we've been orbiting, distance will be > 0
+    if ( distance > 0 ) return
 
 	// calculate mouse position in normalized device coordinates
     // (-1 to +1) for both components
@@ -123,70 +135,70 @@ function onClick( coo ) {
     raycaster.setFromCamera( mouse, camera )
 
 	// calculate objects intersecting the picking ray
-    const intersects = raycaster.intersectObjects( meshes, true )
+    const intersects = raycaster.intersectObjects( intersectables, true )
 
-    if (intersects.length > 0 && !tcontrols.enabled) {
-
-        console.log(intersects[0])
+    if ( intersects.length > 0 ) {
 
         // get closest object
         const object = intersects[0].object
+        console.log(object)
+        console.log('type:' + object.type)
+        console.log('name:' + object.name)
 
-        console.log(object) // debug
+        switch ( object.name ) {
+            case 'terrainMesh':
 
-        if ( object === terrainMesh ) {
+                if (tcontrols) { 
+                    scene.remove(tcontrols) 
+                    tcontrols.dispose()
+                    tcontrols = null
+                    return
+                }
 
-            const icoGeo = new THREE.IcosahedronGeometry()
-            const icoMat = new THREE.MeshNormalMaterial()
-            const ico = new THREE.Mesh(icoGeo, icoMat)
-            ico.position.set(intersects[0].point.x, intersects[0].point.y, intersects[0].point.z)
-            ico.userData.material = icoMat
-            scene.add(ico)
-            meshes.push(ico)
+                const icoGeo = new THREE.IcosahedronGeometry()
+                const icoMat = new THREE.MeshNormalMaterial()
+                const ico = new THREE.Mesh(icoGeo, icoMat)
+                ico.name = 'ico'
+                ico.position.set(intersects[0].point.x, intersects[0].point.y, intersects[0].point.z)
+                ico.userData.material = icoMat
+                scene.add(ico)
+                intersectables.push(ico)
+                break
+            case 'ico':
 
-        } else {
-
-            controls.enabled = false
-
-            tcontrols.enabled = true
-            tcontrols.attach( object )
-            tcontrols.addEventListener( 'dragging-changed', onChange )
-            
-            console.log(object) // debug
-
+                if (tcontrols) { 
+                    scene.remove(tcontrols) 
+                    tcontrols.dispose()
+                }
+                tcontrols = new TransformControls( camera, renderer.domElement )
+                tcontrols.enabled = true
+                tcontrols.attach( object )
+                tcontrols.addEventListener( 'dragging-changed', onChange )
+                scene.add(tcontrols)
+                return
+            default:
+                return
         }
 
-    } else {
-        
-        tcontrols.detach()
-        tcontrols.enabled = false
-        tcontrols.removeEventListener( 'dragging-changed', onChange )
-        controls.enabled = true
-        controls.update()
-        
     }
+
 }
 
 let dragging = false
-function onChange(e) {
+function onChange( e ) {
+
     dragging = ! dragging
-    if (!dragging) {
+    if ( !dragging ) {
 
-        console.log(e.target.object)
-
+        const position = new THREE.Vector3( e.target.object.position.x, e.target.object.position.y, 100 )
         const intersector = new THREE.Raycaster()
-
-        const position = new THREE.Vector3(e.target.object.position.x, e.target.object.position.y, 100)
-
-        intersector.set( position, new THREE.Vector3(0,0,-1))
-        console.log(intersector)
-
+        intersector.set( position, new THREE.Vector3( 0, 0, - 1 ) )
         const intersects = intersector.intersectObject( terrainMesh )
-        console.log(intersects)
-
-        e.target.object.position.set(intersects[0].point.x, intersects[0].point.y, intersects[0].point.z)
-
+        e.target.object.position.set( intersects[0].point.x, intersects[0].point.y, intersects[0].point.z )
+        controls.enabled = true
+        return 
     }
+    controls.enabled = false
 }
 
 function onWindowResize() {
