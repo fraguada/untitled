@@ -89,39 +89,59 @@ function init () {
 
 }
 
-let start, end, ms, startPt, endPt, distance
+let startPt, endPt, distance
 function handleInteraction( event ) {
 
-    //console.log( event )
+    // console.log( event )
 
     let coordinates = null
     if ( event instanceof PointerEvent ) {
+
         if ( event.type === 'pointerdown' ) {
-            start = new Date()
+
             startPt = new THREE.Vector2( event.clientX, event.clientY )
             document.addEventListener( 'pointerup', handleInteraction, false )
             return
+
         } 
+        
         if ( event.type === 'pointerup' ) {
-            end = new Date()
-            ms = end - start
+
             endPt = new THREE.Vector2( event.clientX, event.clientY )
             distance = startPt.distanceTo( endPt )
             coordinates =  { x: event.clientX, y: event.clientY }
             document.removeEventListener( 'pointerup', handleInteraction, false )
+
         }
     } else if ( event instanceof TouchEvent ) {
+
         if ( event.type === 'touchstart' ) {
-            coordinates =  { x: event.changedTouches[0].clientX, y: event.changedTouches[0].clientY }
+
+            startPt = new THREE.Vector2( event.changedTouches[ 0 ].clientX, event.changedTouches[ 0 ].clientY )
+            document.addEventListener( 'touchend', handleInteraction, false )
+            return
+
         }
+
+        if ( event.type === 'touchend' ) {
+
+            endPt = new THREE.Vector2( event.changedTouches[ 0 ].clientX, event.changedTouches[ 0 ].clientY )
+            distance = startPt.distanceTo( endPt )
+            coordinates =  { x: event.changedTouches[ 0 ].clientX, y: event.changedTouches[ 0 ].clientY }
+            document.removeEventListener( 'touchend', handleInteraction, false )
+
+        }
+
     }
 
     onClick( coordinates )
+
 }
 
 function onClick( coo ) {
 
     console.log( `click! (${coo.x}, ${coo.y})`)
+    console.log( `distance ${distance}` )
 
     // if we've been orbiting, distance will be > 0
     if ( distance > 0 ) return
@@ -140,44 +160,50 @@ function onClick( coo ) {
     if ( intersects.length > 0 ) {
 
         // get closest object
-        const object = intersects[0].object
-        console.log(object)
-        console.log('type:' + object.type)
-        console.log('name:' + object.name)
+        const object = intersects[ 0 ].object
 
         switch ( object.name ) {
+
             case 'terrainMesh':
 
-                if (tcontrols) { 
-                    scene.remove(tcontrols) 
+                if ( tcontrols ) { 
+
+                    scene.remove( tcontrols ) 
                     tcontrols.dispose()
                     tcontrols = null
                     return
+
                 }
 
                 const icoGeo = new THREE.IcosahedronGeometry()
                 const icoMat = new THREE.MeshNormalMaterial()
-                const ico = new THREE.Mesh(icoGeo, icoMat)
+                const ico = new THREE.Mesh( icoGeo, icoMat )
                 ico.name = 'ico'
-                ico.position.set(intersects[0].point.x, intersects[0].point.y, intersects[0].point.z)
+                ico.position.set(intersects[ 0 ].point.x, intersects[ 0 ].point.y, intersects[ 0 ].point.z)
                 ico.userData.material = icoMat
-                scene.add(ico)
-                intersectables.push(ico)
+                scene.add( ico )
+                intersectables.push( ico )
                 break
+
             case 'ico':
 
-                if (tcontrols) { 
-                    scene.remove(tcontrols) 
+                if ( tcontrols ) { 
+
+                    scene.remove( tcontrols ) 
                     tcontrols.dispose()
+
                 }
+
                 tcontrols = new TransformControls( camera, renderer.domElement )
                 tcontrols.enabled = true
                 tcontrols.attach( object )
                 tcontrols.addEventListener( 'dragging-changed', onChange )
                 scene.add(tcontrols)
                 return
+
             default:
                 return
+
         }
 
     }
@@ -188,28 +214,35 @@ let dragging = false
 function onChange( e ) {
 
     dragging = ! dragging
+
     if ( !dragging ) {
 
         const position = new THREE.Vector3( e.target.object.position.x, e.target.object.position.y, 100 )
         const intersector = new THREE.Raycaster()
         intersector.set( position, new THREE.Vector3( 0, 0, - 1 ) )
         const intersects = intersector.intersectObject( terrainMesh )
-        e.target.object.position.set( intersects[0].point.x, intersects[0].point.y, intersects[0].point.z )
+        e.target.object.position.set( intersects[ 0 ].point.x, intersects[ 0 ].point.y, intersects[ 0 ].point.z )
         controls.enabled = true
         return 
+
     }
+
     controls.enabled = false
 }
 
 function onWindowResize() {
+
     camera.aspect = window.innerWidth / window.innerHeight
     camera.updateProjectionMatrix()
     renderer.setSize( window.innerWidth, window.innerHeight )
     animate()
+
 }
 
 // function to continuously render the scene
 function animate() {
+
     requestAnimationFrame( animate )
     renderer.render( scene, camera )
+
 }
