@@ -6,12 +6,11 @@ import { Rhino3dmLoader } from 'https://cdn.jsdelivr.net/npm/three@0.126.0/examp
 
 const model = 'mesh.3dm'
 
-const material = new THREE.MeshBasicMaterial( {color:0xffffff, transparent: true, opacity: 0.75} )
+const material = new THREE.MeshBasicMaterial( { color:0xffffff, transparent: true, opacity: 0.75 } )
 const lineMagentaMaterial = new THREE.LineBasicMaterial( { color: 0xff00ff} )
 const lineBlackMaterial = new THREE.LineBasicMaterial( { color: 0x000000} )
 
 document.addEventListener( 'pointerdown', handleInteraction, false)
-document.addEventListener( 'touchstart', handleInteraction, false)
 
 // declare variables to store scene, camera, and renderer
 let scene, camera, renderer, mouse, raycaster, controls, tcontrols
@@ -20,41 +19,7 @@ let terrainMesh, intersectables
 init()
 load()
 
-function load() {
-
-    // load and pass to threejs
-    const loader = new Rhino3dmLoader()
-    loader.setLibraryPath( 'https://cdn.jsdelivr.net/npm/rhino3dm@0.15.0-beta/' )
-
-    loader.load( model, function ( object ) {
-
-        // uncomment to hide spinner when model loads
-        document.getElementById('loader').style.display = 'none'
-
-        object.traverse( child => {
-            if (child.isMesh) {
-                child.material = material
-                child.name = 'terrainMesh'
-                terrainMesh = child
-                intersectables.push(terrainMesh)
-            } else if (child.isLine) {
-                const layerIndex = child.userData.attributes.layerIndex
-                if (object.userData.layers[layerIndex].name === 'dashed')
-                    child.material = lineMagentaMaterial
-                else
-                    child.material = lineBlackMaterial
-            }
-        })
-
-        console.log( object )
-
-        scene.add( object )
-
-    } )
-
-}
-
-// function to setup the scene, camera, renderer, and load 3d model
+// function to setup the scene, camera, renderer, etc
 function init () {
 
     // Rhino models are z-up, so set this as the default
@@ -62,7 +27,7 @@ function init () {
 
     // create a scene and a camera
     scene = new THREE.Scene()
-    scene.background = new THREE.Color(1,1,1)
+    scene.background = new THREE.Color( 1, 1, 1 )
     camera = new THREE.PerspectiveCamera( 65, window.innerWidth / window.innerHeight, 0.1, 1000 )
     camera.position.x = 100
     camera.position.y = 100
@@ -89,6 +54,49 @@ function init () {
 
 }
 
+function load() {
+
+    // load and pass to threejs
+    const loader = new Rhino3dmLoader()
+    loader.setLibraryPath( 'https://cdn.jsdelivr.net/npm/rhino3dm@0.15.0-beta/' )
+
+    loader.load( model, function ( object ) {
+
+        // uncomment to hide spinner when model loads
+        document.getElementById( 'loader' ).style.display = 'none'
+
+        object.traverse( child => {
+
+            if ( child.isMesh ) {
+
+                child.material = material
+                child.name = 'terrainMesh'
+                terrainMesh = child
+                intersectables.push( terrainMesh )
+
+            } else if ( child.isLine ) {
+
+                const layerIndex = child.userData.attributes.layerIndex
+                if ( object.userData.layers[ layerIndex ].name === 'dashed' )
+
+                    child.material = lineMagentaMaterial
+
+                else
+
+                    child.material = lineBlackMaterial
+
+            }
+
+        } )
+
+        console.log( object )
+
+        scene.add( object )
+
+    } )
+
+}
+
 let startPt, endPt, distance
 function handleInteraction( event ) {
 
@@ -111,24 +119,6 @@ function handleInteraction( event ) {
             distance = startPt.distanceTo( endPt )
             coordinates =  { x: event.clientX, y: event.clientY }
             document.removeEventListener( 'pointerup', handleInteraction, false )
-
-        }
-    } else if ( event instanceof TouchEvent ) {
-
-        if ( event.type === 'touchstart' ) {
-
-            startPt = new THREE.Vector2( event.changedTouches[ 0 ].clientX, event.changedTouches[ 0 ].clientY )
-            document.addEventListener( 'touchend', handleInteraction, false )
-            return
-
-        }
-
-        if ( event.type === 'touchend' ) {
-
-            endPt = new THREE.Vector2( event.changedTouches[ 0 ].clientX, event.changedTouches[ 0 ].clientY )
-            distance = startPt.distanceTo( endPt )
-            coordinates =  { x: event.changedTouches[ 0 ].clientX, y: event.changedTouches[ 0 ].clientY }
-            document.removeEventListener( 'touchend', handleInteraction, false )
 
         }
 
@@ -211,17 +201,26 @@ function onClick( coo ) {
 }
 
 let dragging = false
+let lastPt
 function onChange( e ) {
 
     dragging = ! dragging
 
+    // keep track of last valid intersection in case we drag off of the mesh
+    const position = new THREE.Vector3( e.target.object.position.x, e.target.object.position.y, 100 )
+    const intersector = new THREE.Raycaster()
+    intersector.set( position, new THREE.Vector3( 0, 0, - 1 ) )
+    const intersects = intersector.intersectObject( terrainMesh )
+
+    if ( intersects.length > 0 ) {
+
+        lastPt = intersects[ 0 ].point
+
+    }
+
     if ( !dragging ) {
 
-        const position = new THREE.Vector3( e.target.object.position.x, e.target.object.position.y, 100 )
-        const intersector = new THREE.Raycaster()
-        intersector.set( position, new THREE.Vector3( 0, 0, - 1 ) )
-        const intersects = intersector.intersectObject( terrainMesh )
-        e.target.object.position.set( intersects[ 0 ].point.x, intersects[ 0 ].point.y, intersects[ 0 ].point.z )
+        e.target.object.position.set( lastPt.x, lastPt.y, lastPt.z )
         controls.enabled = true
         return 
 
